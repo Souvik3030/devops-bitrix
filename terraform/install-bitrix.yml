@@ -1,0 +1,52 @@
+---
+- name: Install Bitrix Environment on CentOS Stream 9
+  hosts: all
+  become: yes
+  vars:
+    bitrix_script: "bitrix-env-9.sh"
+    target_dir: "/home/bitrix/www"
+
+  tasks:
+    - name: 1 & 2. Download and set permissions for Bitrix script
+      get_url:
+        url: "https://repo.bitrix.info/dnf/{{ bitrix_script }}"
+        dest: "/root/{{ bitrix_script }}"
+        mode: '0777'
+
+    - name: 3 & 4. Run script first time (Triggers Reboot)
+      shell: "./{{ bitrix_script }} -s -y" # -s for silent/skip if possible
+      args:
+        chdir: /root
+      ignore_errors: yes
+
+    - name: 4. Wait for server to reboot
+      reboot:
+        msg: "Rebooting to finalize Bitrix environment"
+        connect_timeout: 5
+        reboot_timeout: 300
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+
+    - name: 5. Run script second time to complete installation
+      shell: "./{{ bitrix_script }} -s -y"
+      args:
+        chdir: /root
+
+    - name: 6. Create bitrix www directory
+      file:
+        path: "{{ target_dir }}"
+        state: directory
+        owner: bitrix # Bitrix usually creates this user
+        group: bitrix
+        mode: '0755'
+
+    - name: 8. Download bitrixsetup.php
+      get_url:
+        url: "https://www.1c-bitrix.ru/download/scripts/bitrixsetup.php"
+        dest: "{{ target_dir }}/bitrixsetup.php"
+        owner: bitrix
+        group: bitrix
+
+    - name: 9. Final check
+      debug:
+        msg: "Setup complete! Access it at http://{{ ansible_host }}/bitrixsetup.php"
